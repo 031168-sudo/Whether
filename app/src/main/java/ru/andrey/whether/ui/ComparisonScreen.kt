@@ -8,10 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -62,14 +61,13 @@ fun ComparisonScreen(repository: WeatherRepository, coords: CoordinatesState) {
     fun compare() {
         val c = coords.parse()
         if (c == null) {
-            error = "Проверьте широту (-90..90) и долготу (-180..180)"
+            error = "Проверьте координаты в настройках"
             return
         }
         loading = true
         error = null
         scope.launch {
             try {
-                // Периоды грузятся параллельно.
                 loaded = coroutineScope {
                     periods.map { p ->
                         async {
@@ -95,74 +93,73 @@ fun ComparisonScreen(repository: WeatherRepository, coords: CoordinatesState) {
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Сравнение периодов", style = MaterialTheme.typography.headlineSmall)
-
-        CoordinatesInput(coords) { error = it }
-
-        periods.forEachIndexed { index, p ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(
-                    value = p.label, onValueChange = { p.label = it },
-                    label = { Text("Название периода ${index + 1}") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = p.start, onValueChange = { p.start = it },
-                        label = { Text("С") }, modifier = Modifier.weight(1f), singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = p.end, onValueChange = { p.end = it },
-                        label = { Text("По") }, modifier = Modifier.weight(1f), singleLine = true
-                    )
-                }
-                if (periods.size > 2) {
-                    OutlinedButton(onClick = { periods.removeAt(index) }) {
-                        Text("Удалить период")
+        Section("Периоды") {
+            periods.forEachIndexed { index, p ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactField(p.label, { p.label = it }, "Название", Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CompactField(p.start, { p.start = it }, "С", Modifier.weight(1f))
+                        CompactField(p.end, { p.end = it }, "По", Modifier.weight(1f))
+                    }
+                    if (periods.size > 2) {
+                        OutlinedButton(onClick = { periods.removeAt(index) }) {
+                            Text("Удалить", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }
-        }
-
-        if (periods.size < MAX_PERIODS) {
-            OutlinedButton(onClick = {
-                periods.add(PeriodInput("Период ${periods.size + 1}", "", ""))
-            }) {
-                Text("Добавить период (до $MAX_PERIODS)")
-            }
-        }
-
-        MetricChips(metric) { metric = it }
-
-        Button(onClick = { compare() }, enabled = !loading) {
-            Text("Сравнить")
-        }
-
-        if (loading) CircularProgressIndicator()
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-
-        if (loaded.any { it.days.isNotEmpty() }) {
-            Text("${metric.label}, ${metric.unit}", style = MaterialTheme.typography.labelLarge)
-            val aligned = alignByDay(loaded, metric)
-            val length = aligned.maxOf { it.size }
-            LineChart(
-                series = loaded.mapIndexed { s, _ -> seriesColors[s % seriesColors.size] to aligned[s] },
-                xStartLabel = "1-й день",
-                xEndLabel = "$length-й день"
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                loaded.forEachIndexed { s, p ->
-                    Text(
-                        "● ${p.label}",
-                        color = seriesColors[s % seriesColors.size],
-                        style = MaterialTheme.typography.labelMedium
-                    )
+            if (periods.size < MAX_PERIODS) {
+                OutlinedButton(
+                    onClick = { periods.add(PeriodInput("Период ${periods.size + 1}", "", "")) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Добавить период (до $MAX_PERIODS)", style = MaterialTheme.typography.labelLarge)
                 }
             }
-            SummaryTable(loaded, metric)
+        }
+
+        Section("Показатель") { MetricChips(metric) { metric = it } }
+
+        Button(onClick = { compare() }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+            Text("Сравнить", style = MaterialTheme.typography.labelLarge)
+        }
+
+        if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
+        if (loaded.any { it.days.isNotEmpty() }) {
+            val aligned = alignByDay(loaded, metric)
+            val length = aligned.maxOf { it.size }
+            Section(metric.label) {
+                LineChart(
+                    series = loaded.mapIndexed { s, _ -> seriesColors[s % seriesColors.size] to aligned[s] },
+                    xStartLabel = "1-й день",
+                    xEndLabel = "$length-й день",
+                    describe = { i ->
+                        listOf("День ${i + 1}") + loaded.mapIndexed { s, p ->
+                            "${p.label}: ${metric.format(aligned[s].getOrNull(i))}"
+                        }
+                    }
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    loaded.forEachIndexed { s, p ->
+                        Text(
+                            "● ${p.label}",
+                            color = seriesColors[s % seriesColors.size],
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+                Text(
+                    "Нажмите или проведите по графику, чтобы увидеть день",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Section("Сводка") { SummaryTable(loaded, metric) }
         }
     }
 }
@@ -171,30 +168,30 @@ fun ComparisonScreen(repository: WeatherRepository, coords: CoordinatesState) {
 @Composable
 private fun SummaryTable(series: List<PeriodSeries>, metric: Metric) {
     val base = series.first().average(metric)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Период", modifier = Modifier.weight(1.6f), style = MaterialTheme.typography.labelMedium)
-            Text("Среднее", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-            Text("Мин", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-            Text("Макс", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-            Text("Δ к 1-му", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+    val header = MaterialTheme.typography.labelSmall
+    val body = MaterialTheme.typography.bodySmall
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Период", modifier = Modifier.weight(1.5f), style = header)
+            Text("Среднее", modifier = Modifier.weight(1f), style = header)
+            Text("Мин", modifier = Modifier.weight(1f), style = header)
+            Text("Макс", modifier = Modifier.weight(1f), style = header)
+            Text("Δ", modifier = Modifier.weight(1f), style = header)
         }
         series.forEachIndexed { index, p ->
             val avg = p.average(metric)
             val diff = if (index == 0 || avg == null || base == null) null else avg - base
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(p.label, modifier = Modifier.weight(1.6f))
-                Text(avg.fmt(metric), modifier = Modifier.weight(1f))
-                Text(p.min(metric).fmt(metric), modifier = Modifier.weight(1f))
-                Text(p.max(metric).fmt(metric), modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(p.label, modifier = Modifier.weight(1.5f), style = body)
+                Text(metric.format(avg), modifier = Modifier.weight(1f), style = body)
+                Text(metric.format(p.min(metric)), modifier = Modifier.weight(1f), style = body)
+                Text(metric.format(p.max(metric)), modifier = Modifier.weight(1f), style = body)
                 Text(
                     diff?.let { (if (it > 0) "+" else "") + "%.1f".format(it) } ?: "—",
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    style = body
                 )
             }
         }
     }
 }
-
-private fun Double?.fmt(metric: Metric): String =
-    this?.let { "%.1f %s".format(it, metric.unit) } ?: "—"
