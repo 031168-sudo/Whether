@@ -38,7 +38,7 @@ import ru.andrey.whether.data.alignByDay
 
 private const val MAX_PERIODS = 4
 
-/** Изменяемое описание периода, которое редактирует пользователь. */
+/** Редактируемое описание периода. */
 class PeriodInput(label: String, start: String, end: String) {
     var label by mutableStateOf(label)
     var start by mutableStateOf(start)
@@ -46,11 +46,8 @@ class PeriodInput(label: String, start: String, end: String) {
 }
 
 @Composable
-fun ComparisonScreen(repository: WeatherRepository = WeatherRepository()) {
+fun ComparisonScreen(repository: WeatherRepository, coords: CoordinatesState) {
     val scope = rememberCoroutineScope()
-
-    var latText by remember { mutableStateOf("55.75") }
-    var lonText by remember { mutableStateOf("37.62") }
 
     val periods = remember {
         mutableStateListOf(
@@ -64,9 +61,8 @@ fun ComparisonScreen(repository: WeatherRepository = WeatherRepository()) {
     var error by remember { mutableStateOf<String?>(null) }
 
     fun compare() {
-        val lat = latText.toDoubleOrNull()
-        val lon = lonText.toDoubleOrNull()
-        if (lat == null || lon == null || lat !in -90.0..90.0 || lon !in -180.0..180.0) {
+        val c = coords.parse()
+        if (c == null) {
             error = "Проверьте широту (-90..90) и долготу (-180..180)"
             return
         }
@@ -82,7 +78,7 @@ fun ComparisonScreen(repository: WeatherRepository = WeatherRepository()) {
                                 label = p.label,
                                 startDate = p.start,
                                 endDate = p.end,
-                                days = repository.history(lat, lon, p.start, p.end)
+                                days = repository.history(c.latitude, c.longitude, p.start, p.end)
                             )
                         }
                     }.map { it.await() }
@@ -105,16 +101,7 @@ fun ComparisonScreen(repository: WeatherRepository = WeatherRepository()) {
     ) {
         Text("Сравнение периодов", style = MaterialTheme.typography.headlineSmall)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = latText, onValueChange = { latText = it },
-                label = { Text("Широта") }, modifier = Modifier.weight(1f), singleLine = true
-            )
-            OutlinedTextField(
-                value = lonText, onValueChange = { lonText = it },
-                label = { Text("Долгота") }, modifier = Modifier.weight(1f), singleLine = true
-            )
-        }
+        CoordinatesInput(coords) { error = it }
 
         periods.forEachIndexed { index, p ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -152,20 +139,12 @@ fun ComparisonScreen(repository: WeatherRepository = WeatherRepository()) {
         Text("Метрика", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Metric.entries.take(3).forEach { m ->
-                FilterChip(
-                    selected = metric == m,
-                    onClick = { metric = m },
-                    label = { Text(m.label) }
-                )
+                FilterChip(selected = metric == m, onClick = { metric = m }, label = { Text(m.label) })
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Metric.entries.drop(3).forEach { m ->
-                FilterChip(
-                    selected = metric == m,
-                    onClick = { metric = m },
-                    label = { Text(m.label) }
-                )
+                FilterChip(selected = metric == m, onClick = { metric = m }, label = { Text(m.label) })
             }
         }
 
@@ -248,8 +227,10 @@ private fun SummaryTable(series: List<PeriodSeries>, metric: Metric) {
                 Text(avg.fmt(metric), modifier = Modifier.weight(1f))
                 Text(p.min(metric).fmt(metric), modifier = Modifier.weight(1f))
                 Text(p.max(metric).fmt(metric), modifier = Modifier.weight(1f))
-                Text(diff?.let { (if (it > 0) "+" else "") + "%.1f".format(it) } ?: "—",
-                    modifier = Modifier.weight(1f))
+                Text(
+                    diff?.let { (if (it > 0) "+" else "") + "%.1f".format(it) } ?: "—",
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }

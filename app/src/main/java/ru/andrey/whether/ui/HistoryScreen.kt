@@ -1,9 +1,5 @@
 package ru.andrey.whether.ui
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,23 +21,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import ru.andrey.whether.data.DayRecord
 import ru.andrey.whether.data.WeatherRepository
-import ru.andrey.whether.location.DeviceLocation
 
 @Composable
-fun HistoryScreen(repository: WeatherRepository = WeatherRepository()) {
-    val context = LocalContext.current
+fun HistoryScreen(repository: WeatherRepository, coords: CoordinatesState) {
     val scope = rememberCoroutineScope()
 
-    var latText by remember { mutableStateOf("55.75") }
-    var lonText by remember { mutableStateOf("37.62") }
     var startText by remember { mutableStateOf("2025-11-01") }
     var endText by remember { mutableStateOf("2025-11-30") }
     var records by remember { mutableStateOf<List<DayRecord>>(emptyList()) }
@@ -49,9 +39,8 @@ fun HistoryScreen(repository: WeatherRepository = WeatherRepository()) {
     var error by remember { mutableStateOf<String?>(null) }
 
     fun load() {
-        val lat = latText.toDoubleOrNull()
-        val lon = lonText.toDoubleOrNull()
-        if (lat == null || lon == null || lat !in -90.0..90.0 || lon !in -180.0..180.0) {
+        val c = coords.parse()
+        if (c == null) {
             error = "Проверьте широту (-90..90) и долготу (-180..180)"
             return
         }
@@ -59,29 +48,13 @@ fun HistoryScreen(repository: WeatherRepository = WeatherRepository()) {
         error = null
         scope.launch {
             try {
-                records = repository.history(lat, lon, startText, endText)
+                records = repository.history(c.latitude, c.longitude, startText, endText)
                 if (records.isEmpty()) error = "Нет данных за выбранный период"
             } catch (e: Exception) {
                 error = "Не удалось загрузить данные: ${e.message}"
             } finally {
                 loading = false
             }
-        }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { granted ->
-        if (granted.values.any { it }) {
-            val coords = DeviceLocation.lastKnown(context)
-            if (coords != null) {
-                latText = "%.4f".format(coords.latitude)
-                lonText = "%.4f".format(coords.longitude)
-            } else {
-                error = "Не удалось определить местоположение, введите координаты вручную"
-            }
-        } else {
-            error = "Нет разрешения на геолокацию, введите координаты вручную"
         }
     }
 
@@ -94,44 +67,7 @@ fun HistoryScreen(repository: WeatherRepository = WeatherRepository()) {
     ) {
         Text("История погоды", style = MaterialTheme.typography.headlineSmall)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = latText,
-                onValueChange = { latText = it },
-                label = { Text("Широта") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            OutlinedTextField(
-                value = lonText,
-                onValueChange = { lonText = it },
-                label = { Text("Долгота") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-        }
-
-        Button(onClick = {
-            val granted = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-            if (granted) {
-                val coords = DeviceLocation.lastKnown(context)
-                if (coords != null) {
-                    latText = "%.4f".format(coords.latitude)
-                    lonText = "%.4f".format(coords.longitude)
-                }
-            } else {
-                permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    )
-                )
-            }
-        }) {
-            Text("Использовать моё местоположение")
-        }
+        CoordinatesInput(coords) { error = it }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
@@ -166,22 +102,19 @@ fun HistoryScreen(repository: WeatherRepository = WeatherRepository()) {
 
 @Composable
 private fun TemperatureChart(records: List<DayRecord>) {
-    val lineColor = MaterialTheme.colorScheme.primary
-    val meanColor = MaterialTheme.colorScheme.tertiary
+    val maxColor = MaterialTheme.colorScheme.primary
+    val minColor = MaterialTheme.colorScheme.tertiary
     val values = records.flatMap { listOfNotNull(it.tMax, it.tMin) }
     if (values.isEmpty()) return
     val minV = values.min()
     val maxV = values.max()
     val range = (maxV - minV).takeIf { it > 0 } ?: 1.0
 
-    Canvas(modifier = Modifier
-        .fillMaxWidth()
-        .height(200.dp)
-    ) {
+    Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
         fun yFor(v: Double) = size.height - ((v - minV) / range * size.height).toFloat()
         fun xFor(i: Int) = if (records.size == 1) 0f else i * size.width / (records.size - 1)
 
-        fun drawSeries(pick: (DayRecord) -> Double?, color: Color) {
+        fun drawSeries(pick: (DayRecord) -> Double?, color: androidx.compose.ui.graphics.Color) {
             val path = Path()
             var started = false
             records.forEachIndexed { i, r ->
@@ -192,11 +125,11 @@ private fun TemperatureChart(records: List<DayRecord>) {
                     path.lineTo(xFor(i), yFor(v))
                 }
             }
-            drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+            drawPath(path, color, style = Stroke(width = 4f))
         }
 
-        drawSeries({ it.tMax }, lineColor)
-        drawSeries({ it.tMin }, meanColor)
+        drawSeries({ it.tMax }, maxColor)
+        drawSeries({ it.tMin }, minColor)
     }
 }
 
