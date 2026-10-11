@@ -48,6 +48,9 @@ class WeatherRepository(
         return fresh
     }
 
+    /** Удаляет все кэшированные дни для всех координат. */
+    suspend fun clearCache() = dao.deleteAll()
+
     companion object {
         /** Сколько последних дней не кэшировать. */
         const val STABLE_LAG_DAYS = 7L

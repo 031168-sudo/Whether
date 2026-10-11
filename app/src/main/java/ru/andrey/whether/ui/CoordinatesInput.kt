@@ -1,6 +1,8 @@
 package ru.andrey.whether.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,16 +29,31 @@ import java.util.Locale
  * Общее состояние координат для всех вкладок. Создаётся один раз в MainActivity,
  * поэтому ввод на одной вкладке виден на другой.
  */
-class CoordinatesState {
-    var latText by mutableStateOf("55.75")
-    var lonText by mutableStateOf("37.62")
+class CoordinatesState(private val prefs: SharedPreferences) {
+    var latText by mutableStateOf(prefs.getString(KEY_LAT, DEFAULT_LAT) ?: DEFAULT_LAT)
+    var lonText by mutableStateOf(prefs.getString(KEY_LON, DEFAULT_LON) ?: DEFAULT_LON)
 
-    /** Принимает и точку, и запятую как разделитель. Возвращает null, если координаты некорректны. */
+    /**
+     * Принимает и точку, и запятую как разделитель. Возвращает null, если координаты некорректны.
+     * Корректные координаты сохраняются и восстанавливаются при следующем запуске.
+     */
     fun parse(): Coordinates? {
         val lat = latText.trim().replace(',', '.').toDoubleOrNull() ?: return null
         val lon = lonText.trim().replace(',', '.').toDoubleOrNull() ?: return null
         if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
+        prefs.edit().putString(KEY_LAT, latText).putString(KEY_LON, lonText).apply()
         return Coordinates(lat, lon)
+    }
+
+    companion object {
+        private const val PREFS_NAME = "whether_prefs"
+        private const val KEY_LAT = "last_lat"
+        private const val KEY_LON = "last_lon"
+        private const val DEFAULT_LAT = "55.75"
+        private const val DEFAULT_LON = "37.62"
+
+        fun create(context: Context): CoordinatesState =
+            CoordinatesState(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE))
     }
 }
 

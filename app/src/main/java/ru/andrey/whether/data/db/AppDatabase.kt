@@ -34,6 +34,9 @@ interface DailyDao {
 
     @Upsert
     suspend fun upsertAll(items: List<DailyEntity>)
+
+    @Query("DELETE FROM daily")
+    suspend fun deleteAll()
 }
 
 @Database(entities = [DailyEntity::class], version = 1, exportSchema = false)
