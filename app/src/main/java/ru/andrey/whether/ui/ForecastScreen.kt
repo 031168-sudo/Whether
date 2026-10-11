@@ -2,6 +2,7 @@ package ru.andrey.whether.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -17,17 +18,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ru.andrey.whether.data.DayRecord
 import ru.andrey.whether.data.Metric
 import ru.andrey.whether.data.WeatherRepository
 
+private val maxColor = Color(0xFFE53935)
+private val minColor = Color(0xFF1E88E5)
+
 @Composable
 fun ForecastScreen(repository: WeatherRepository, coords: CoordinatesState) {
     val scope = rememberCoroutineScope()
 
-    var metric by remember { mutableStateOf(Metric.T_MEAN) }
     var records by remember { mutableStateOf<List<DayRecord>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -66,15 +70,23 @@ fun ForecastScreen(repository: WeatherRepository, coords: CoordinatesState) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
         if (records.isNotEmpty()) {
-            Section("Показатель") { MetricChips(metric) { metric = it } }
-            val values = records.map(metric.pick)
-            Section(metric.label) {
+            val maxs = records.map { it.tMax }
+            val mins = records.map { it.tMin }
+            Section("Температура, °C") {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("● Максимум", color = maxColor, style = MaterialTheme.typography.labelMedium)
+                    Text("● Минимум", color = minColor, style = MaterialTheme.typography.labelMedium)
+                }
                 LineChart(
-                    series = listOf(MaterialTheme.colorScheme.primary to values),
+                    series = listOf(maxColor to maxs, minColor to mins),
                     xStartLabel = records.first().date,
                     xEndLabel = records.last().date,
                     describe = { i ->
-                        listOf(records[i].date, "${metric.label}: ${metric.format(values[i])}")
+                        listOf(
+                            records[i].date,
+                            "Макс: ${Metric.T_MAX.format(maxs[i])}",
+                            "Мин: ${Metric.T_MIN.format(mins[i])}"
+                        )
                     }
                 )
                 Text(
