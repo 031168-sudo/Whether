@@ -6,7 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application
-        android:label="Whether"
+        android:label="Моя Погода"
+        android:icon="@drawable/app_icon"
+        android:roundIcon="@drawable/app_icon"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity

@@ -11,11 +11,29 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        // applicationId менять нельзя: по нему Android обновляет установленное приложение.
         applicationId = "ru.andrey.whether"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI передаёт номер запуска: каждая новая сборка выше предыдущей, и её можно поставить поверх.
+        versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
+    }
+
+    // Фиксированный ключ подписи: одинаковый во всех сборках, поэтому обновление ставится поверх.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     buildFeatures {

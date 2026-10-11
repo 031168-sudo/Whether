@@ -29,7 +29,10 @@ jobs:
           gradle-version: 8.14.3
 
       - name: Assemble debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: >-
+          gradle :app:assembleDebug --stacktrace
+          -PversionCode=${{ github.run_number }}
+          -PversionName=1.0.${{ github.run_number }}
 
       - uses: actions/upload-artifact@v4
         if: always()
