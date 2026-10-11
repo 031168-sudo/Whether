@@ -4,12 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -28,6 +30,7 @@ import ru.andrey.whether.data.WeatherRepository
 import ru.andrey.whether.data.db.AppDatabase
 import ru.andrey.whether.ui.ComparisonScreen
 import ru.andrey.whether.ui.CoordinatesState
+import ru.andrey.whether.ui.ForecastScreen
 import ru.andrey.whether.ui.HistoryScreen
 
 class MainActivity : ComponentActivity() {
@@ -47,34 +50,43 @@ class MainActivity : ComponentActivity() {
                     val scope = rememberCoroutineScope()
                     var tab by remember { mutableStateOf(0) }
                     var cacheMessage by remember { mutableStateOf<String?>(null) }
+                    val titles = listOf("Прогноз", "История", "Сравнение")
 
-                    Column {
-                        TabRow(selectedTabIndex = tab) {
-                            Tab(selected = tab == 0, onClick = { tab = 0 }) {
-                                Text("История", modifier = Modifier.padding(16.dp))
-                            }
-                            Tab(selected = tab == 1, onClick = { tab = 1 }) {
-                                Text("Сравнение", modifier = Modifier.padding(16.dp))
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            OutlinedButton(onClick = {
-                                scope.launch {
-                                    repository.clearCache()
-                                    cacheMessage = "Кэш очищен"
+                    // Scaffold отступает от статус-бара сверху и от навигации снизу.
+                    Scaffold(
+                        topBar = {
+                            Column {
+                                TabRow(selectedTabIndex = tab) {
+                                    titles.forEachIndexed { i, title ->
+                                        Tab(selected = tab == i, onClick = { tab = i }) {
+                                            Text(title, modifier = Modifier.padding(12.dp))
+                                        }
+                                    }
                                 }
-                            }) {
-                                Text("Очистить кэш")
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    OutlinedButton(onClick = {
+                                        scope.launch {
+                                            repository.clearCache()
+                                            cacheMessage = "Кэш очищен"
+                                        }
+                                    }) {
+                                        Text("Очистить кэш")
+                                    }
+                                    cacheMessage?.let { Text(it, style = MaterialTheme.typography.labelMedium) }
+                                }
                             }
-                            cacheMessage?.let { Text(it, style = MaterialTheme.typography.labelMedium) }
                         }
-                        when (tab) {
-                            0 -> HistoryScreen(repository, coords)
-                            else -> ComparisonScreen(repository, coords)
+                    ) { inner ->
+                        Box(modifier = Modifier.fillMaxSize().padding(inner)) {
+                            when (tab) {
+                                0 -> ForecastScreen(repository, coords)
+                                1 -> HistoryScreen(repository, coords)
+                                else -> ComparisonScreen(repository, coords)
+                            }
                         }
                     }
                 }

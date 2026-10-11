@@ -8,15 +8,16 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /**
- * Загрузка истории с кэшем в Room.
+ * Прогноз и история.
  *
- * Кэшируются только дни, которые старше [STABLE_LAG_DAYS]: реанализ Open-Meteo
- * дополняется с задержкой, и свежие значения могут поменяться.
- * Если все дни диапазона уже в кэше, сеть не используется.
+ * История кэшируется в Room. Кэшируются только дни старше [STABLE_LAG_DAYS]:
+ * реанализ Open-Meteo дополняется с задержкой, и свежие значения могут поменяться.
+ * Прогноз не кэшируется: он меняется каждый час.
  */
 class WeatherRepository(
     private val api: OpenMeteoArchiveApi,
     private val dao: DailyDao,
+    private val forecastApi: OpenMeteoForecastApi = OpenMeteoForecastApi.create(),
     private val today: () -> LocalDate = { LocalDate.now() }
 ) {
 
@@ -46,6 +47,15 @@ class WeatherRepository(
             dao.upsertAll(fresh.map { it.toEntity(key) })
         }
         return fresh
+    }
+
+    /** Прогноз на 16 дней. Средняя температура в прогнозе не приходит, считаем её как среднее max и min. */
+    suspend fun forecast(latitude: Double, longitude: Double): List<DayRecord> {
+        val daily = forecastApi.getDaily(latitude, longitude).daily ?: return emptyList()
+        return daily.toRecords().map { r ->
+            if (r.tMean != null || r.tMax == null || r.tMin == null) r
+            else r.copy(tMean = (r.tMax + r.tMin) / 2)
+        }
     }
 
     /** Удаляет все кэшированные дни для всех координат. */
